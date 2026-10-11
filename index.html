@@ -44,6 +44,9 @@
     .member-row { display:flex; gap:8px; } .member-row input { min-width:0; } .member-row button { flex:none; }
     .people-panel { display:flex; flex-direction:column; min-height:420px; }
     .people-list { padding:10px 12px; flex:1; }
+    .requests { padding:0 16px 15px; color:#c9c3b9; font-size:12px; }
+    .request { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:9px 0; border-top:1px solid #ffffff18; }
+    .request-actions { display:flex; gap:5px; } .request-actions button { padding:5px 8px; font-size:11px; }
     .person-choice { display:block; width:100%; text-align:left; color:var(--ink); background:transparent; padding:11px 10px; margin:2px 0; font-weight:650; }
     .person-choice:hover, .person-choice.active { background:#f0ece5; color:#293a57; }
     .person-choice.active::before { content:'•'; color:#b49463; margin-right:8px; }
@@ -95,38 +98,94 @@
     <div class="notice" id="notice"></div><div class="season-banner" id="seasonBanner"></div>
     <div class="grid">
       <section class="panel"><div class="panel-head"><h2 id="listHeading">Wishlist</h2><span class="count" id="count"></span></div><div class="list" id="list"></div><form class="add" id="addForm"><h2 style="margin-bottom:13px">Add a wish</h2><div class="add-grid"><input id="giftName" required maxlength="100" placeholder="Gift name, e.g. Wool blanket"><input id="giftPrice" maxlength="30" placeholder="Budget, e.g. £45"><input class="wide" id="giftLink" maxlength="300" placeholder="Link (optional)"></div><button class="primary" type="submit">Add to my wishlist</button></form></section>
-      <aside class="panel people-panel"><div class="panel-head"><h2>People</h2><span class="count" id="peopleCount"></span></div><div class="people-list" id="peopleList"></div><details class="season-settings"><summary>Gift season settings</summary><form id="seasonForm"><div class="add-grid"><input id="seasonName" required maxlength="50" placeholder="Occasion, e.g. Christmas"><input id="seasonUntil" type="date" aria-label="End date"></div><button class="secondary" type="submit">Turn on</button><button class="danger" id="endSeason" type="button">End</button></form></details><div class="friend-action"><button class="secondary" id="openFriendDialog" type="button">+ Add friend</button></div></aside>
+      <aside class="panel people-panel"><div class="panel-head"><h2>People</h2><span class="count" id="peopleCount"></span></div><div class="people-list" id="peopleList"></div><div class="requests" id="requests"></div><details class="season-settings" id="season-settings"><summary>Gift season settings</summary><form id="seasonForm"><div class="add-grid"><input id="seasonName" required maxlength="50" placeholder="Occasion, e.g. Christmas"><input id="seasonUntil" type="date" aria-label="End date"></div><button class="secondary" type="submit">Turn on</button><button class="danger" id="endSeason" type="button">End</button></form></details><div class="friend-action"><button class="secondary" id="openFriendDialog" type="button">+ Add friend</button></div></aside>
     </div><footer>Your wishlist is stored in this browser. Add people, then start building their lists.</footer>
   </main><dialog id="friendDialog"><form class="dialog-content" id="memberForm"><h2 id="friendDialogTitle">Add a friend</h2><p id="friendDialogText">Enter the username they use in your group.</p><label for="memberName">Username</label><input id="memberName" required maxlength="40" placeholder="e.g. alex-smith"><div class="dialog-actions"><button class="danger" id="closeFriendDialog" type="button">Cancel</button><button class="primary" id="friendSubmit" style="margin:0" type="submit">Add friend</button></div></form></dialog>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
-    const seed = { people:[], season:{active:false,name:'',until:''} };
-    const key='secret-wishlist-v2', profileKey='secret-wishlist-current-profile-v1';
-    let data=JSON.parse(localStorage.getItem(key)||'null')||seed; data.season ||= {active:false,name:'',until:''};
-    const $=id=>document.getElementById(id); const save=()=>localStorage.setItem(key,JSON.stringify(data)); const person=id=>data.people.find(p=>p.id===id);
-    let viewer=localStorage.getItem(profileKey)||null; if(viewer&&!person(viewer))viewer=null; if(!viewer&&data.people.length){viewer=data.people[0].id;localStorage.setItem(profileKey,viewer);} let listOwner=viewer;
-    function openFriendDialog(){const isFirst=!viewer; $('friendDialogTitle').textContent=isFirst?'Create your profile':'Add a friend'; $('friendDialogText').textContent=isFirst?'Choose the username that identifies you in this group.':'Enter the username they use in your group.'; $('friendSubmit').textContent=isFirst?'Create profile':'Add friend'; $('friendDialog').showModal();}
-    function setup(){ $('listOwner').onchange=e=>{listOwner=e.target.value;render()}; $('addForm').onsubmit=addGift; $('memberForm').onsubmit=addPerson; $('seasonForm').onsubmit=setSeason; $('endSeason').onclick=endSeason; $('openFriendDialog').onclick=openFriendDialog; $('closeFriendDialog').onclick=()=>$('friendDialog').close(); render(); }
-    function esc(s){return String(s).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
-    function render(){
-      const options=data.people.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
-      $('listOwner').innerHTML=options;
-      $('seasonName').value=data.season.active?data.season.name:''; $('seasonUntil').value=data.season.active?data.season.until:'';
-      $('peopleCount').textContent=`${data.people.length} member${data.people.length===1?'':'s'}`;
-      $('peopleList').innerHTML=data.people.length ? data.people.map(p=>`<button class="person-choice ${p.id===listOwner?'active':''} ${p.id===viewer?'me':''}" type="button" onclick="viewPerson('${p.id}')">${esc(p.name)}</button>`).join('') : '<div class="empty">No friends yet.</div>';
-      const banner=data.season.until?`Gift season is active for ${data.season.name} — please avoid buying from your wishlist until after ${new Date(data.season.until+'T12:00').toLocaleDateString(undefined,{day:'numeric',month:'long'})}.`:`Gift season is active for ${data.season.name} — please avoid buying from your wishlist for now.`;
-      $('seasonBanner').className='season-banner'+(data.season.active?' show':''); $('seasonBanner').textContent=data.season.active?banner:'';
-      $('openFriendDialog').textContent=viewer?'+ Add friend':'Create your profile';
-      if(!viewer){ $('headerName').textContent='Create your profile'; $('title').textContent='Your shared wishlist'; $('subtitle').textContent='Set a username to begin your first wishlist.'; $('listHeading').textContent='Wishlist'; $('count').textContent=''; $('list').innerHTML='<div class="empty">Create your profile to start your wishlist.</div>'; $('addForm').style.display='none'; $('notice').className='notice'; return; }
-      const me=person(viewer), viewing=person(listOwner||viewer); listOwner=viewing.id; $('listOwner').value=listOwner; $('headerName').textContent=`@${me.name}`; $('title').textContent=`${viewing.name}'s wishlist`;
-      const own=viewing.id===viewer; $('subtitle').textContent=own?'Keep your list up to date with things you would genuinely love.':`You’re shopping for ${viewing.name}. Claimed items are still shown to prevent duplicate gifts.`; $('listHeading').textContent=own?'My wishes':`${viewing.name}'s wishes`; $('addForm').style.display=own?'block':'none';
-      const gifts=viewing.gifts; $('count').textContent=`${gifts.length} item${gifts.length===1?'':'s'}`; $('notice').className='notice';
-      $('list').innerHTML=gifts.length?gifts.map(g=>{const claimed=!!g.boughtBy; const action=own?`<button class="danger" onclick="removeGift('${g.id}')">Remove</button>`:claimed?`<button class="unbuy" onclick="toggleBought('${g.id}')">Claimed by ${g.boughtBy===viewer?'you':'someone else'}</button>`:`<button class="buy" onclick="toggleBought('${g.id}')">I’ll buy this</button>`; return `<div class="gift ${!own&&claimed?'bought':''}"><div class="gift-main"><div class="gift-title">${esc(g.name)}</div>${g.link?`<div class="gift-note"><a href="${esc(g.link)}" target="_blank" rel="noopener">View gift ↗</a></div>`:''}</div>${g.price?`<span class="cost">${esc(g.price)}</span>`:''}${action}</div>`}).join(''):'<div class="empty">Nothing here yet.</div>';
+    const SUPABASE_URL = 'https://akgrvnkncrwdstqqhrcy.supabase.co';
+    const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable__y547ayNPs_pEyLAoN7DSA_ekhL6NJm';
+    const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+    const $ = id => document.getElementById(id);
+    const esc = s => String(s ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+    let currentUser = null, profile = null, selectedId = null, profiles = [], requests = [], wishes = [], claims = [], season = null;
+    const appUrl = `${window.location.origin}${window.location.pathname}`;
+
+    function showError(error) { if (error) { console.error(error); window.alert(error.message || 'Something went wrong. Please try again.'); } }
+    function profileFor(id) { return profiles.find(item => item.id === id); }
+    function myFriends() { const ids = new Set([currentUser.id]); requests.filter(r => r.status === 'accepted').forEach(r => ids.add(r.sender_id === currentUser.id ? r.recipient_id : r.sender_id)); return profiles.filter(p => ids.has(p.id)); }
+    function isOwnList() { return selectedId === currentUser?.id; }
+
+    async function signIn() { const { error } = await db.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: appUrl } }); showError(error); }
+    async function signOut() { const { error } = await db.auth.signOut(); showError(error); }
+    async function loadAccount(session) {
+      currentUser = session?.user || null; profile = null; selectedId = null; profiles = []; requests = []; wishes = []; claims = []; season = null;
+      if (!currentUser) { render(); return; }
+      const { data, error } = await db.from('profiles').select('*').eq('id', currentUser.id).maybeSingle();
+      if (error) { showError(error); render(); return; }
+      profile = data;
+      if (profile) { selectedId = profile.id; await loadNetwork(); await loadWishlist(); }
+      render();
+      if (!profile) openFriendDialog();
     }
-    function addGift(e){e.preventDefault();const p=person(viewer);p.gifts.unshift({id:Date.now().toString(),name:$('giftName').value.trim(),price:$('giftPrice').value.trim(),link:$('giftLink').value.trim(),boughtBy:null});e.target.reset();save();render();}
-    function addPerson(e){e.preventDefault(); const name=$('memberName').value.trim(); if(!name)return; const id=`person-${Date.now()}`; data.people.push({id,name,gifts:[]}); if(!viewer){viewer=id;localStorage.setItem(profileKey,id);} listOwner=id; e.target.reset(); $('friendDialog').close(); save(); render();}
-    function setSeason(e){e.preventDefault(); data.season={active:true,name:$('seasonName').value.trim(),until:$('seasonUntil').value}; save(); render();}
-    function endSeason(){data.season={active:false,name:'',until:''}; save(); render();}
-    window.viewPerson=id=>{listOwner=id; render();}; window.removeGift=id=>{const p=person(viewer);p.gifts=p.gifts.filter(g=>g.id!==id);save();render();}; window.toggleBought=id=>{const target=person(listOwner);const g=target.gifts.find(g=>g.id===id);if(g.boughtBy&&g.boughtBy!==viewer)return;g.boughtBy=g.boughtBy?null:viewer;save();render();}; setup();
+    async function loadNetwork() {
+      const [profileResult, requestResult] = await Promise.all([db.from('profiles').select('id, username'), db.from('friend_requests').select('*')]);
+      if (profileResult.error) showError(profileResult.error); else profiles = profileResult.data || [];
+      if (requestResult.error) showError(requestResult.error); else requests = requestResult.data || [];
+    }
+    async function loadWishlist() {
+      if (!selectedId) return;
+      const [wishResult, seasonResult] = await Promise.all([db.from('wishes').select('*').eq('owner_id', selectedId).order('created_at', { ascending: false }), db.from('gift_seasons').select('*').eq('owner_id', selectedId).maybeSingle()]);
+      if (wishResult.error) showError(wishResult.error); else wishes = wishResult.data || [];
+      if (seasonResult.error) showError(seasonResult.error); else season = seasonResult.data;
+      claims = [];
+      if (!isOwnList() && wishes.length) { const claimResult = await db.from('claims').select('*').in('wish_id', wishes.map(w => w.id)); if (claimResult.error) showError(claimResult.error); else claims = claimResult.data || []; }
+    }
+    async function refresh() { await loadNetwork(); await loadWishlist(); render(); }
+
+    function openFriendDialog() {
+      if (!currentUser) { signIn(); return; }
+      const isFirst = !profile;
+      $('friendDialogTitle').textContent = isFirst ? 'Choose your username' : 'Add a friend';
+      $('friendDialogText').textContent = isFirst ? 'This is how friends will find you. Use 3–30 lowercase letters, numbers, hyphens, or underscores.' : 'Enter the exact username your friend chose.';
+      $('friendSubmit').textContent = isFirst ? 'Create profile' : 'Send request'; $('memberName').value = ''; $('friendDialog').showModal();
+    }
+    function render() {
+      const signedIn = Boolean(currentUser), people = signedIn && profile ? myFriends() : [];
+      $('headerName').textContent = signedIn ? (profile ? `@${profile.username} · Sign out` : 'Finish profile') : 'Sign in with Google';
+      $('headerName').style.cursor = 'pointer'; $('headerName').onclick = signedIn ? signOut : signIn;
+      $('peopleCount').textContent = `${people.length} member${people.length === 1 ? '' : 's'}`;
+      $('peopleList').innerHTML = people.length ? people.map(p => `<button class="person-choice ${p.id === selectedId ? 'active' : ''} ${p.id === currentUser.id ? 'me' : ''}" type="button" onclick="viewPerson('${p.id}')">${esc(p.username)}</button>`).join('') : '<div class="empty">Sign in to connect with friends.</div>';
+      const pending = requests.filter(r => r.recipient_id === currentUser?.id && r.status === 'pending');
+      $('requests').innerHTML = pending.length ? `<label>Friend requests</label>${pending.map(r => `<div class="request"><span>@${esc(profileFor(r.sender_id)?.username || 'unknown')}</span><span class="request-actions"><button class="buy" onclick="answerRequest('${r.id}','accepted')">Accept</button><button class="danger" onclick="answerRequest('${r.id}','declined')">Decline</button></span></div>`).join('')}` : '';
+      $('openFriendDialog').textContent = profile ? '+ Add friend' : 'Create your profile';
+      if (!signedIn) { $('title').textContent = 'A wishlist worth keeping secret.'; $('subtitle').textContent = 'Sign in with Google to create your private profile or shop for friends.'; $('listHeading').textContent = 'Welcome'; $('count').textContent = ''; $('list').innerHTML = '<div class="empty">Sign in to begin.</div>'; $('addForm').style.display = 'none'; $('seasonBanner').className = 'season-banner'; $('season-settings').style.display = 'none'; return; }
+      if (!profile) { $('title').textContent = 'Choose your username'; $('subtitle').textContent = 'Your username lets friends find you without revealing your email address.'; $('listHeading').textContent = 'Profile'; $('count').textContent = ''; $('list').innerHTML = '<div class="empty">Choose a username to create your wishlist.</div>'; $('addForm').style.display = 'none'; $('seasonBanner').className = 'season-banner'; $('season-settings').style.display = 'none'; return; }
+      const viewing = profileFor(selectedId) || profile; selectedId = viewing.id; const own = isOwnList();
+      $('title').textContent = own ? 'Your wishlist' : `${viewing.username}'s wishlist`; $('subtitle').textContent = own ? 'Keep your list up to date with things you would genuinely love.' : `You’re shopping for ${viewing.username}. Claims are private from the list owner.`; $('listHeading').textContent = own ? 'My wishes' : `${viewing.username}'s wishes`; $('count').textContent = `${wishes.length} item${wishes.length === 1 ? '' : 's'}`; $('addForm').style.display = own ? 'block' : 'none'; $('season-settings').style.display = own ? 'block' : 'none';
+      $('seasonName').value = own && season?.active ? season.name : ''; $('seasonUntil').value = own && season?.active && season.ends_on ? season.ends_on : '';
+      const seasonText = season?.ends_on ? `Gift season is active for ${season.name} — please avoid buying from your wishlist until after ${new Date(season.ends_on + 'T12:00').toLocaleDateString(undefined, { day: 'numeric', month: 'long' })}.` : season?.active ? `Gift season is active for ${season.name} — please avoid buying from your wishlist for now.` : '';
+      $('seasonBanner').className = `season-banner${season?.active ? ' show' : ''}`; $('seasonBanner').textContent = seasonText;
+      $('list').innerHTML = wishes.length ? wishes.map(w => { const claim = claims.find(c => c.wish_id === w.id); const action = own ? `<button class="danger" onclick="removeGift('${w.id}')">Remove</button>` : claim ? (claim.claimant_id === currentUser.id ? `<button class="unbuy" onclick="toggleClaim('${w.id}')">Claimed by you</button>` : `<span class="cost">Claimed</span>`) : `<button class="buy" onclick="toggleClaim('${w.id}')">I’ll buy this</button>`; return `<div class="gift ${!own && claim ? 'bought' : ''}"><div class="gift-main"><div class="gift-title">${esc(w.name)}</div>${w.link ? `<div class="gift-note"><a href="${esc(w.link)}" target="_blank" rel="noopener">View gift ↗</a></div>` : ''}</div>${w.budget ? `<span class="cost">${esc(w.budget)}</span>` : ''}${action}</div>`; }).join('') : '<div class="empty">Nothing here yet.</div>';
+    }
+
+    async function submitProfileOrRequest(event) {
+      event.preventDefault(); const username = $('memberName').value.trim().toLowerCase();
+      if (!/^[a-z0-9][a-z0-9_-]{2,29}$/.test(username)) { window.alert('Use 3–30 lowercase letters, numbers, hyphens, or underscores.'); return; }
+      if (!profile) { const { error } = await db.from('profiles').insert({ id: currentUser.id, username }); if (error) { showError(error); return; } }
+      else { const { data: target, error: lookupError } = await db.from('profiles').select('id, username').eq('username', username).maybeSingle(); if (lookupError) { showError(lookupError); return; } if (!target) { window.alert('No user has claimed that username yet.'); return; } if (target.id === currentUser.id) { window.alert('That is your username.'); return; } const { error } = await db.from('friend_requests').insert({ sender_id: currentUser.id, recipient_id: target.id }); if (error) { showError(error); return; } window.alert(`Friend request sent to @${target.username}.`); }
+      $('friendDialog').close(); await loadAccount({ user: currentUser });
+    }
+    async function addGift(event) { event.preventDefault(); const { error } = await db.from('wishes').insert({ owner_id: currentUser.id, name: $('giftName').value.trim(), budget: $('giftPrice').value.trim() || null, link: $('giftLink').value.trim() || null }); if (error) { showError(error); return; } event.target.reset(); await refresh(); }
+    async function removeGift(id) { const { error } = await db.from('wishes').delete().eq('id', id); if (error) showError(error); else await refresh(); }
+    async function toggleClaim(wishId) { const existing = claims.find(c => c.wish_id === wishId); const result = existing?.claimant_id === currentUser.id ? await db.from('claims').delete().eq('wish_id', wishId) : await db.from('claims').insert({ wish_id: wishId, claimant_id: currentUser.id }); if (result.error) showError(result.error); else await refresh(); }
+    async function answerRequest(id, status) { const { error } = await db.from('friend_requests').update({ status }).eq('id', id); if (error) showError(error); else await refresh(); }
+    async function setSeason(event) { event.preventDefault(); const { error } = await db.from('gift_seasons').upsert({ owner_id: currentUser.id, name: $('seasonName').value.trim(), ends_on: $('seasonUntil').value || null, active: true, updated_at: new Date().toISOString() }); if (error) showError(error); else await refresh(); }
+    async function endSeason() { const { error } = await db.from('gift_seasons').update({ active: false, updated_at: new Date().toISOString() }).eq('owner_id', currentUser.id); if (error) showError(error); else await refresh(); }
+    window.viewPerson = async id => { selectedId = id; await loadWishlist(); render(); };
+    window.removeGift = removeGift; window.toggleClaim = toggleClaim; window.answerRequest = answerRequest;
+    $('memberForm').onsubmit = submitProfileOrRequest; $('addForm').onsubmit = addGift; $('seasonForm').onsubmit = setSeason; $('endSeason').onclick = endSeason; $('openFriendDialog').onclick = openFriendDialog; $('closeFriendDialog').onclick = () => $('friendDialog').close();
+    db.auth.getSession().then(({ data }) => loadAccount(data.session)); db.auth.onAuthStateChange((_event, session) => setTimeout(() => loadAccount(session), 0));
   </script>
 </body>
 </html>
