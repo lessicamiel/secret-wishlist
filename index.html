@@ -108,7 +108,7 @@
     const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
     const $ = id => document.getElementById(id);
     const esc = s => String(s ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
-    let currentUser = null, profile = null, selectedId = null, profiles = [], requests = [], wishes = [], claims = [], season = null;
+    let currentUser = null, profile = null, canCreateProfile = false, selectedId = null, profiles = [], requests = [], wishes = [], claims = [], season = null;
     const appUrl = `${window.location.origin}${window.location.pathname}`;
 
     function showError(error) { if (error) { console.error(error); window.alert(error.message || 'Something went wrong. Please try again.'); } }
@@ -119,14 +119,19 @@
     async function signIn() { const { error } = await db.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: appUrl } }); showError(error); }
     async function signOut() { const { error } = await db.auth.signOut(); showError(error); }
     async function loadAccount(session) {
-      currentUser = session?.user || null; profile = null; selectedId = null; profiles = []; requests = []; wishes = []; claims = []; season = null;
+      currentUser = session?.user || null; profile = null; canCreateProfile = false; selectedId = null; profiles = []; requests = []; wishes = []; claims = []; season = null;
       if (!currentUser) { render(); return; }
       const { data, error } = await db.from('profiles').select('*').eq('id', currentUser.id).maybeSingle();
       if (error) { showError(error); render(); return; }
       profile = data;
+      if (!profile) {
+        const inviteResult = await db.from('invited_emails').select('email').maybeSingle();
+        if (inviteResult.error) { showError(inviteResult.error); render(); return; }
+        canCreateProfile = Boolean(inviteResult.data);
+      }
       if (profile) { selectedId = profile.id; await loadNetwork(); await loadWishlist(); }
       render();
-      if (!profile) openFriendDialog();
+      if (!profile && canCreateProfile) openFriendDialog();
     }
     async function loadNetwork() {
       const [profileResult, requestResult] = await Promise.all([db.from('profiles').select('id, username'), db.from('friend_requests').select('*')]);
@@ -145,6 +150,7 @@
 
     function openFriendDialog() {
       if (!currentUser) { signIn(); return; }
+      if (!profile && !canCreateProfile) { window.alert('This wishlist is invite-only. Ask the organiser to add the Google email address you signed in with.'); return; }
       const isFirst = !profile;
       $('friendDialogTitle').textContent = isFirst ? 'Choose your username' : 'Add a friend';
       $('friendDialogText').textContent = isFirst ? 'This is how friends will find you. Use 3–30 lowercase letters, numbers, hyphens, or underscores.' : 'Enter the exact username your friend chose.';
@@ -152,15 +158,15 @@
     }
     function render() {
       const signedIn = Boolean(currentUser), people = signedIn && profile ? myFriends() : [];
-      $('headerName').textContent = signedIn ? (profile ? `@${profile.username} · Sign out` : 'Finish profile') : 'Sign in with Google';
+      $('headerName').textContent = signedIn ? (profile ? `@${profile.username} · Sign out` : canCreateProfile ? 'Finish profile' : 'Invitation required · Sign out') : 'Sign in with Google';
       $('headerName').style.cursor = 'pointer'; $('headerName').onclick = signedIn ? signOut : signIn;
       $('peopleCount').textContent = `${people.length} member${people.length === 1 ? '' : 's'}`;
-      $('peopleList').innerHTML = people.length ? people.map(p => `<button class="person-choice ${p.id === selectedId ? 'active' : ''} ${p.id === currentUser.id ? 'me' : ''}" type="button" onclick="viewPerson('${p.id}')">${esc(p.username)}</button>`).join('') : '<div class="empty">Sign in to connect with friends.</div>';
+      $('peopleList').innerHTML = people.length ? people.map(p => `<button class="person-choice ${p.id === selectedId ? 'active' : ''} ${p.id === currentUser.id ? 'me' : ''}" type="button" onclick="viewPerson('${p.id}')">${esc(p.username)}</button>`).join('') : `<div class="empty">${signedIn && !profile && !canCreateProfile ? 'You need an invitation to join this wishlist.' : 'Sign in to connect with friends.'}</div>`;
       const pending = requests.filter(r => r.recipient_id === currentUser?.id && r.status === 'pending');
       $('requests').innerHTML = pending.length ? `<label>Friend requests</label>${pending.map(r => `<div class="request"><span>@${esc(profileFor(r.sender_id)?.username || 'unknown')}</span><span class="request-actions"><button class="buy" onclick="answerRequest('${r.id}','accepted')">Accept</button><button class="danger" onclick="answerRequest('${r.id}','declined')">Decline</button></span></div>`).join('')}` : '';
-      $('openFriendDialog').textContent = profile ? '+ Add friend' : 'Create your profile';
+      $('openFriendDialog').textContent = profile ? '+ Add friend' : canCreateProfile ? 'Create your profile' : 'Invitation required';
       if (!signedIn) { $('title').textContent = 'A wishlist worth keeping secret.'; $('subtitle').textContent = 'Sign in with Google to create your private profile or shop for friends.'; $('listHeading').textContent = 'Welcome'; $('count').textContent = ''; $('list').innerHTML = '<div class="empty">Sign in to begin.</div>'; $('addForm').style.display = 'none'; $('seasonBanner').className = 'season-banner'; $('season-settings').style.display = 'none'; return; }
-      if (!profile) { $('title').textContent = 'Choose your username'; $('subtitle').textContent = 'Your username lets friends find you without revealing your email address.'; $('listHeading').textContent = 'Profile'; $('count').textContent = ''; $('list').innerHTML = '<div class="empty">Choose a username to create your wishlist.</div>'; $('addForm').style.display = 'none'; $('seasonBanner').className = 'season-banner'; $('season-settings').style.display = 'none'; return; }
+      if (!profile) { const invited = canCreateProfile; $('title').textContent = invited ? 'Choose your username' : 'This wishlist is invite-only'; $('subtitle').textContent = invited ? 'Your username lets friends find you without revealing your email address.' : `Ask the organiser to add ${currentUser.email || 'the Google email you used'} to the invitation list, then sign in again.`; $('listHeading').textContent = invited ? 'Profile' : 'Invitation needed'; $('count').textContent = ''; $('list').innerHTML = invited ? '<div class="empty">Choose a username to create your wishlist.</div>' : '<div class="empty">Your Google account is signed in, but it is not on this wishlist’s invitation list.</div>'; $('addForm').style.display = 'none'; $('seasonBanner').className = 'season-banner'; $('season-settings').style.display = 'none'; return; }
       const viewing = profileFor(selectedId) || profile; selectedId = viewing.id; const own = isOwnList();
       $('title').textContent = own ? 'Your wishlist' : `${viewing.username}'s wishlist`; $('subtitle').textContent = own ? 'Keep your list up to date with things you would genuinely love.' : `You’re shopping for ${viewing.username}. Claims are private from the list owner.`; $('listHeading').textContent = own ? 'My wishes' : `${viewing.username}'s wishes`; $('count').textContent = `${wishes.length} item${wishes.length === 1 ? '' : 's'}`; $('addForm').style.display = own ? 'block' : 'none'; $('season-settings').style.display = 'block';
       $('seasonName').value = season?.active ? season.name : ''; $('seasonUntil').value = season?.active && season.ends_on ? season.ends_on : '';
