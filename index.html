@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Secret Santa List</title>
+  <style>
+    :root { --ink:#202637; --muted:#6e7380; --line:#e4dfd6; --paper:#fffdfa; --bg:#f5f3ef; --brand:#293a57; --accent:#b49463; --success:#4d766e; }
+    * { box-sizing:border-box; }
+    body { margin:0; font:15px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color:var(--ink); background:radial-gradient(circle at 83% -5%, #ede6d8 0, transparent 30rem), var(--bg); }
+    button, input, select { font:inherit; }
+    header { background:linear-gradient(112deg, #1f293d, #35405a); color:#f8f5ee; padding:22px max(24px, calc((100vw - 1080px)/2)); display:flex; align-items:center; justify-content:space-between; gap:18px; }
+    .brand { font-size:20px; font-weight:800; letter-spacing:-.65px; } .brand span { color:#d2b887; }
+    main { max-width:1080px; margin:42px auto; padding:0 24px 52px; }
+    .top { display:flex; justify-content:space-between; gap:24px; align-items:end; margin-bottom:24px; }
+    h1 { font-size:34px; letter-spacing:-1.45px; margin:0 0 4px; font-weight:760; } h2 { font-size:16px; margin:0; letter-spacing:-.2px; } p { color:var(--muted); margin:0; }
+    .switcher { min-width:220px; } label { display:block; font-size:12px; color:var(--muted); font-weight:700; margin-bottom:5px; text-transform:uppercase; letter-spacing:.05em; }
+    select, input { width:100%; border:1px solid #d8d2c8; background:#fffefa; border-radius:8px; padding:10px 11px; color:var(--ink); transition:border .2s, box-shadow .2s; } select:focus,input:focus { outline:0; border-color:#b49463; box-shadow:0 0 0 3px #eee4d3; }
+    .notice { display:none; background:#f5f0e7; color:#665334; border:1px solid #e5d8bf; padding:12px 14px; border-radius:10px; margin:0 0 22px; font-size:14px; }
+    .notice.show { display:block; }
+    .season-banner { display:none; background:#293a57; color:#fffaf0; border-radius:11px; margin:0 0 22px; padding:13px 15px; font-size:14px; box-shadow:0 8px 20px #293a5720; }
+    .season-banner.show { display:block; }
+    .grid { display:grid; grid-template-columns:1.06fr .94fr; gap:24px; align-items:start; }
+    .panel { background:rgba(255,253,250,.92); border:1px solid var(--line); border-radius:18px; box-shadow:0 16px 42px #392d1b0a; overflow:hidden; }
+    .panel-head { padding:20px 22px; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .count { color:var(--muted); font-size:13px; }
+    .list { padding:8px 14px 16px; min-height:150px; }
+    .gift { padding:15px 9px; display:flex; gap:12px; border-bottom:1px solid #eee9e1; align-items:flex-start; } .gift:last-child { border:0; }
+    .gift-main { flex:1; min-width:0; } .gift-title { font-weight:740; letter-spacing:-.15px; } .gift-note { font-size:13px; color:var(--muted); margin-top:3px; overflow-wrap:anywhere; }
+    .gift-note a { color:#53647b; font-weight:650; } .cost { font-size:12px; color:var(--success); font-weight:750; white-space:nowrap; }
+    .gift.bought { opacity:.48; text-decoration:line-through; }
+    .add { padding:20px 22px 22px; border-top:1px solid var(--line); background:#fdfbf7; }
+    .add-grid { display:grid; grid-template-columns:1.3fr .7fr; gap:10px; } .wide { grid-column:span 2; }
+    button { border:0; border-radius:8px; padding:9px 12px; font-weight:750; cursor:pointer; transition:transform .15s, filter .15s; } button:hover { transform:translateY(-1px); filter:brightness(.97); }
+    .primary { color:white; background:linear-gradient(110deg, #273850, #495b78); margin-top:12px; box-shadow:0 6px 14px #2635502d; } .primary:hover { background:#334966; }
+    .secondary { background:#f1eadf; color:#6f5834; } .danger { background:transparent; color:#a04a55; padding:6px; font-size:13px; }
+    .buy { background:#ece7dd; color:#625338; white-space:nowrap; } .unbuy { background:#ececf0; color:#535c6b; white-space:nowrap; }
+    .empty { color:var(--muted); padding:28px 8px; text-align:center; }
+    .how { padding:20px; } .step { display:flex; gap:12px; margin-bottom:18px; } .step:last-child { margin:0; }
+    .num { flex:none; width:25px; height:25px; display:grid; place-items:center; background:#eee6d8; color:#806439; border-radius:50%; font-weight:800; font-size:13px; }
+    .step strong { display:block; margin-bottom:2px; }.step p { font-size:13px; }
+    .privacy { margin-top:20px; background:#f2eee7; color:#635942; border-radius:11px; padding:13px; font-size:13px; }
+    .member-form { margin-top:22px; padding-top:19px; border-top:1px solid #ebe5dc; }
+    .member-row { display:flex; gap:8px; } .member-row input { min-width:0; } .member-row button { flex:none; }
+    .people-panel { display:flex; flex-direction:column; min-height:420px; }
+    .people-list { padding:10px 12px; flex:1; }
+    .person-choice { display:block; width:100%; text-align:left; color:var(--ink); background:transparent; padding:11px 10px; margin:2px 0; font-weight:650; }
+    .person-choice:hover, .person-choice.active { background:#f0ece5; color:#293a57; }
+    .person-choice.active::before { content:'•'; color:#b49463; margin-right:8px; }
+    .friend-action { padding:16px 20px 20px; border-top:1px solid var(--line); }
+    .friend-action button { width:100%; }
+    .season-settings { margin:4px 20px 16px; color:var(--muted); font-size:13px; }
+    .season-settings summary { cursor:pointer; font-weight:700; color:#5a6374; margin-bottom:10px; }
+    .season-settings .add-grid { grid-template-columns:1fr; margin-bottom:9px; }
+    dialog { width:min(420px, calc(100vw - 36px)); border:0; border-radius:16px; padding:0; box-shadow:0 24px 70px #1d263a40; color:var(--ink); background:#fffdfa; }
+    dialog::backdrop { background:#1e293b85; backdrop-filter:blur(2px); }
+    .dialog-content { padding:24px; } .dialog-content h2 { font-size:20px; margin-bottom:5px; } .dialog-content p { font-size:14px; margin-bottom:20px; }
+    .dialog-actions { display:flex; justify-content:flex-end; gap:9px; margin-top:14px; }
+    footer { text-align:center; color:var(--muted); font-size:12px; margin-top:22px; }
+    /* Night-garden art direction */
+    body { min-height:100vh; color:#f4eee6; background:radial-gradient(circle at 80% -12%, #6a57a9 0, transparent 29rem), radial-gradient(circle at -12% 87%, #0d7a73 0, transparent 30rem), #11131d; }
+    body::before { content:''; position:fixed; inset:0; z-index:-1; pointer-events:none; opacity:.55; background-image:radial-gradient(#eee0b8 1px, transparent 1.5px); background-size:92px 92px; mask-image:linear-gradient(to bottom, black, transparent 85%); }
+    header { position:relative; padding:25px max(24px, calc((100vw - 1180px)/2)); background:transparent; border-bottom:1px solid #ffffff1c; }
+    .brand { font-family:Georgia, 'Times New Roman', serif; font-size:25px; font-weight:400; letter-spacing:-1px; } .brand span { color:#d9b77a; font-style:italic; }
+    #headerName { color:#d6cbbd; font-size:13px; letter-spacing:.08em; text-transform:uppercase; }
+    .profile-badge { border:1px solid #d9b77a66; border-radius:999px; padding:7px 12px; }
+    main { max-width:1180px; margin:0 auto; padding:62px 24px 64px; }
+    .top { margin-bottom:36px; align-items:end; }
+    h1 { font-family:Georgia, 'Times New Roman', serif; max-width:680px; font-size:clamp(43px, 6vw, 76px); line-height:.91; letter-spacing:-4px; font-weight:400; color:#f7f1e9; }
+    h1::first-letter { color:#e2bd7e; } .top p { max-width:470px; margin-top:13px; color:#b7b4bf; font-size:16px; }
+    .switcher { min-width:185px; } label { color:#bbb3a9; font-size:10px; letter-spacing:.14em; }
+    select, input { color:#f6f0e8; border-color:#ffffff31; background:#ffffff0d; border-radius:3px; } select option { color:#1b1a22; background:#f8f2e8; } select:focus,input:focus { border-color:#d9b77a; box-shadow:0 0 0 3px #d9b77a26; }
+    .grid { grid-template-columns:minmax(0, 1fr) 250px; gap:20px; }
+    .panel { background:linear-gradient(145deg, #ffffff12, #ffffff07); border:1px solid #ffffff20; border-radius:2px; box-shadow:0 28px 65px #00000042; backdrop-filter:blur(18px); }
+    .panel-head { padding:19px 22px; border-color:#ffffff19; } .panel h2 { color:#f4eee6; font-size:13px; letter-spacing:.13em; text-transform:uppercase; } .count { color:#b8a889; }
+    .list { padding:8px 15px 15px; min-height:210px; } .gift { padding:17px 9px; border-color:#ffffff14; }
+    .gift-title { color:#fbf6ef; font-size:16px; } .gift-note { color:#b6b5bf; } .gift-note a { color:#d9b77a; } .cost { color:#91c8bf; }
+    .add { background:#090b12a6; border-color:#ffffff19; padding:21px 22px 23px; } .add h2 { margin-bottom:14px; }
+    .primary { border-radius:2px; background:linear-gradient(110deg, #b17b4c, #dfbd7d); color:#1a1514; box-shadow:none; letter-spacing:.02em; } .primary:hover { background:#edcf95; }
+    .secondary { border:1px solid #d9b77a88; border-radius:2px; background:transparent; color:#e4c793; } .buy { border-radius:2px; background:#1b625f; color:#eaf5f1; } .unbuy { border-radius:2px; background:#ffffff18; color:#dfd6c8; } .danger { color:#d49da1; }
+    .people-panel { min-height:520px; } .people-list { padding:12px; }
+    .person-choice { border-radius:2px; color:#d8d4d0; padding:12px 10px; font-size:14px; } .person-choice:hover, .person-choice.active { color:#fff8ef; background:#ffffff12; } .person-choice.active { border-left:2px solid #d9b77a; } .person-choice.active::before { color:#d9b77a; } .person-choice.me { color:#e6ca99; } .person-choice.me::after { content:'You'; float:right; font-size:10px; letter-spacing:.08em; opacity:.72; text-transform:uppercase; }
+    .friend-action { border-color:#ffffff19; padding:16px; } .friend-action button { padding:11px 12px; }
+    .season-settings { color:#b7b3b3; border-top:1px solid #ffffff19; padding-top:14px; margin:4px 16px 16px; } .season-settings summary { color:#d8c4a0; }
+    .season-banner { background:linear-gradient(110deg, #1b625f, #283552); color:#f8f1e7; border-radius:2px; box-shadow:0 16px 34px #0004; }
+    footer { color:#8f919d; letter-spacing:.03em; } .empty { color:#a8a6ad; }
+    dialog { background:#191b27; border:1px solid #ffffff26; color:#f7f0e7; border-radius:3px; } .dialog-content p { color:#b8b4bf; } dialog::backdrop { background:#070912c2; backdrop-filter:blur(7px); }
+    @media (max-width:720px) { header,.top { align-items:flex-start; flex-direction:column; }.switcher { width:100%; }.grid { grid-template-columns:1fr; } main { padding-top:38px; } h1 { letter-spacing:-2.5px; } }
+  </style>
+</head>
+<body>
+  <header><div class="brand">Secret <span>Wishlist</span></div><div class="profile-badge" id="headerName">Your private list</div></header>
+  <main>
+    <div class="top"><div><h1 id="title">Wishlists</h1><p id="subtitle">Your ideas, kept between friends.</p></div><select id="listOwner" hidden></select></div>
+    <div class="notice" id="notice"></div><div class="season-banner" id="seasonBanner"></div>
+    <div class="grid">
+      <section class="panel"><div class="panel-head"><h2 id="listHeading">Wishlist</h2><span class="count" id="count"></span></div><div class="list" id="list"></div><form class="add" id="addForm"><h2 style="margin-bottom:13px">Add a wish</h2><div class="add-grid"><input id="giftName" required maxlength="100" placeholder="Gift name, e.g. Wool blanket"><input id="giftPrice" maxlength="30" placeholder="Budget, e.g. £45"><input class="wide" id="giftLink" maxlength="300" placeholder="Link (optional)"></div><button class="primary" type="submit">Add to my wishlist</button></form></section>
+      <aside class="panel people-panel"><div class="panel-head"><h2>People</h2><span class="count" id="peopleCount"></span></div><div class="people-list" id="peopleList"></div><details class="season-settings"><summary>Gift season settings</summary><form id="seasonForm"><div class="add-grid"><input id="seasonName" required maxlength="50" placeholder="Occasion, e.g. Christmas"><input id="seasonUntil" type="date" aria-label="End date"></div><button class="secondary" type="submit">Turn on</button><button class="danger" id="endSeason" type="button">End</button></form></details><div class="friend-action"><button class="secondary" id="openFriendDialog" type="button">+ Add friend</button></div></aside>
+    </div><footer>Your wishlist is stored in this browser. Add people, then start building their lists.</footer>
+  </main><dialog id="friendDialog"><form class="dialog-content" id="memberForm"><h2 id="friendDialogTitle">Add a friend</h2><p id="friendDialogText">Enter the username they use in your group.</p><label for="memberName">Username</label><input id="memberName" required maxlength="40" placeholder="e.g. alex-smith"><div class="dialog-actions"><button class="danger" id="closeFriendDialog" type="button">Cancel</button><button class="primary" id="friendSubmit" style="margin:0" type="submit">Add friend</button></div></form></dialog>
+  <script>
+    const seed = { people:[], season:{active:false,name:'',until:''} };
+    const key='secret-wishlist-v2', profileKey='secret-wishlist-current-profile-v1';
+    let data=JSON.parse(localStorage.getItem(key)||'null')||seed; data.season ||= {active:false,name:'',until:''};
+    const $=id=>document.getElementById(id); const save=()=>localStorage.setItem(key,JSON.stringify(data)); const person=id=>data.people.find(p=>p.id===id);
+    let viewer=localStorage.getItem(profileKey)||null; if(viewer&&!person(viewer))viewer=null; if(!viewer&&data.people.length){viewer=data.people[0].id;localStorage.setItem(profileKey,viewer);} let listOwner=viewer;
+    function openFriendDialog(){const isFirst=!viewer; $('friendDialogTitle').textContent=isFirst?'Create your profile':'Add a friend'; $('friendDialogText').textContent=isFirst?'Choose the username that identifies you in this group.':'Enter the username they use in your group.'; $('friendSubmit').textContent=isFirst?'Create profile':'Add friend'; $('friendDialog').showModal();}
+    function setup(){ $('listOwner').onchange=e=>{listOwner=e.target.value;render()}; $('addForm').onsubmit=addGift; $('memberForm').onsubmit=addPerson; $('seasonForm').onsubmit=setSeason; $('endSeason').onclick=endSeason; $('openFriendDialog').onclick=openFriendDialog; $('closeFriendDialog').onclick=()=>$('friendDialog').close(); render(); }
+    function esc(s){return String(s).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
+    function render(){
+      const options=data.people.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
+      $('listOwner').innerHTML=options;
+      $('seasonName').value=data.season.active?data.season.name:''; $('seasonUntil').value=data.season.active?data.season.until:'';
+      $('peopleCount').textContent=`${data.people.length} member${data.people.length===1?'':'s'}`;
+      $('peopleList').innerHTML=data.people.length ? data.people.map(p=>`<button class="person-choice ${p.id===listOwner?'active':''} ${p.id===viewer?'me':''}" type="button" onclick="viewPerson('${p.id}')">${esc(p.name)}</button>`).join('') : '<div class="empty">No friends yet.</div>';
+      const banner=data.season.until?`Gift season is active for ${data.season.name} — please avoid buying from your wishlist until after ${new Date(data.season.until+'T12:00').toLocaleDateString(undefined,{day:'numeric',month:'long'})}.`:`Gift season is active for ${data.season.name} — please avoid buying from your wishlist for now.`;
+      $('seasonBanner').className='season-banner'+(data.season.active?' show':''); $('seasonBanner').textContent=data.season.active?banner:'';
+      $('openFriendDialog').textContent=viewer?'+ Add friend':'Create your profile';
+      if(!viewer){ $('headerName').textContent='Create your profile'; $('title').textContent='Your shared wishlist'; $('subtitle').textContent='Set a username to begin your first wishlist.'; $('listHeading').textContent='Wishlist'; $('count').textContent=''; $('list').innerHTML='<div class="empty">Create your profile to start your wishlist.</div>'; $('addForm').style.display='none'; $('notice').className='notice'; return; }
+      const me=person(viewer), viewing=person(listOwner||viewer); listOwner=viewing.id; $('listOwner').value=listOwner; $('headerName').textContent=`@${me.name}`; $('title').textContent=`${viewing.name}'s wishlist`;
+      const own=viewing.id===viewer; $('subtitle').textContent=own?'Keep your list up to date with things you would genuinely love.':`You’re shopping for ${viewing.name}. Claimed items are still shown to prevent duplicate gifts.`; $('listHeading').textContent=own?'My wishes':`${viewing.name}'s wishes`; $('addForm').style.display=own?'block':'none';
+      const gifts=viewing.gifts; $('count').textContent=`${gifts.length} item${gifts.length===1?'':'s'}`; $('notice').className='notice';
+      $('list').innerHTML=gifts.length?gifts.map(g=>{const claimed=!!g.boughtBy; const action=own?`<button class="danger" onclick="removeGift('${g.id}')">Remove</button>`:claimed?`<button class="unbuy" onclick="toggleBought('${g.id}')">Claimed by ${g.boughtBy===viewer?'you':'someone else'}</button>`:`<button class="buy" onclick="toggleBought('${g.id}')">I’ll buy this</button>`; return `<div class="gift ${!own&&claimed?'bought':''}"><div class="gift-main"><div class="gift-title">${esc(g.name)}</div>${g.link?`<div class="gift-note"><a href="${esc(g.link)}" target="_blank" rel="noopener">View gift ↗</a></div>`:''}</div>${g.price?`<span class="cost">${esc(g.price)}</span>`:''}${action}</div>`}).join(''):'<div class="empty">Nothing here yet.</div>';
+    }
+    function addGift(e){e.preventDefault();const p=person(viewer);p.gifts.unshift({id:Date.now().toString(),name:$('giftName').value.trim(),price:$('giftPrice').value.trim(),link:$('giftLink').value.trim(),boughtBy:null});e.target.reset();save();render();}
+    function addPerson(e){e.preventDefault(); const name=$('memberName').value.trim(); if(!name)return; const id=`person-${Date.now()}`; data.people.push({id,name,gifts:[]}); if(!viewer){viewer=id;localStorage.setItem(profileKey,id);} listOwner=id; e.target.reset(); $('friendDialog').close(); save(); render();}
+    function setSeason(e){e.preventDefault(); data.season={active:true,name:$('seasonName').value.trim(),until:$('seasonUntil').value}; save(); render();}
+    function endSeason(){data.season={active:false,name:'',until:''}; save(); render();}
+    window.viewPerson=id=>{listOwner=id; render();}; window.removeGift=id=>{const p=person(viewer);p.gifts=p.gifts.filter(g=>g.id!==id);save();render();}; window.toggleBought=id=>{const target=person(listOwner);const g=target.gifts.find(g=>g.id===id);if(g.boughtBy&&g.boughtBy!==viewer)return;g.boughtBy=g.boughtBy?null:viewer;save();render();}; setup();
+  </script>
+</body>
+</html>
