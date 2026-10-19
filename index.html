@@ -97,6 +97,18 @@
     .season-banner { background:linear-gradient(110deg, #1b625f, #283552); color:#f8f1e7; border-radius:2px; box-shadow:0 16px 34px #0004; }
     footer { color:#8f919d; letter-spacing:.03em; } .empty { color:#a8a6ad; }
     dialog { background:#191b27; border:1px solid #ffffff26; color:#f7f0e7; border-radius:3px; } .dialog-content p { color:#b8b4bf; } dialog::backdrop { background:#070912c2; backdrop-filter:blur(7px); }
+    /* Gift season: a refined winterberry variation of the night-garden palette. */
+    body.gift-season-active { background:radial-gradient(circle at 82% -12%, #9a3e61 0, transparent 31rem), radial-gradient(circle at -10% 88%, #54224d 0, transparent 32rem), #180f1c; }
+    body.gift-season-active::before { opacity:.68; }
+    body.gift-season-active header { border-color:#f0c7b830; }
+    body.gift-season-active .brand span, body.gift-season-active h1::first-letter { color:#f0c7b8; }
+    body.gift-season-active .profile-badge { border-color:#f0c7b866; }
+    body.gift-season-active .panel { border-color:#f0c7b829; background:linear-gradient(145deg, #fff1f214, #ffffff07); }
+    body.gift-season-active .panel-head, body.gift-season-active .friend-action, body.gift-season-active .season-settings { border-color:#f0c7b821; }
+    body.gift-season-active .person-choice.active { border-left-color:#f0c7b8; }
+    body.gift-season-active .season-banner { background:linear-gradient(110deg, #7a294b, #4c2548); box-shadow:0 16px 34px #1d071866; }
+    body.gift-season-active .buy { background:#7b3451; }
+    body.gift-season-active .secondary { border-color:#f0c7b88c; color:#f0c7b8; }
     @media (max-width:720px) { header,.top { align-items:flex-start; flex-direction:column; }.switcher { width:100%; }.grid { grid-template-columns:1fr; } main { padding-top:38px; } h1 { letter-spacing:-2.5px; } }
   </style>
 </head>
@@ -175,6 +187,7 @@
     }
     function render() {
       const signedIn = Boolean(currentUser), people = signedIn && profile ? myFriends() : [];
+      document.body.classList.toggle('gift-season-active', Boolean(profile && season?.active));
       $('headerName').textContent = signedIn ? (profile ? `@${profile.username} · Sign out` : canCreateProfile ? 'Finish profile' : 'Invitation required · Sign out') : 'Sign in with Google';
       $('headerName').style.cursor = 'pointer'; $('headerName').onclick = signedIn ? signOut : signIn;
       $('peopleCount').textContent = `${people.length} member${people.length === 1 ? '' : 's'}`;
