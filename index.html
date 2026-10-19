@@ -34,6 +34,10 @@
     .shopper-note { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; color:#d4d0d4; font-size:13px; padding:5px 0; border-top:1px solid #ffffff12; overflow-wrap:anywhere; }
     .shopper-note:first-of-type { border-top:0; } .shopper-note a { color:#e4c793; }
     .shopper-note-form { display:flex; gap:7px; margin-top:9px; } .shopper-note-form input { min-width:0; flex:1; padding:7px 9px; font-size:13px; } .shopper-note-form button { padding:7px 10px; font-size:12px; }
+    .secret-ideas { flex:1 0 100%; margin:12px 0 2px; padding:15px; border:1px solid #d9b77a4f; border-radius:3px; background:linear-gradient(120deg, #b17b4c16, #ffffff05); }
+    .secret-ideas h3 { margin:0 0 3px; color:#e4c793; font:400 20px/1.1 Georgia, 'Times New Roman', serif; } .secret-ideas > p { font-size:13px; color:#b8b4bf; margin-bottom:10px; }
+    .secret-idea { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; padding:10px 0; border-top:1px solid #ffffff15; } .secret-idea-title { color:#f7f0e7; font-weight:700; } .secret-idea-copy { color:#c2bdc7; font-size:13px; margin-top:2px; white-space:pre-wrap; overflow-wrap:anywhere; } .secret-idea a { color:#e4c793; font-size:13px; }
+    .secret-idea-form { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px; padding-top:12px; border-top:1px solid #ffffff15; } .secret-idea-form .wide { grid-column:span 2; } .secret-idea-form button { justify-self:start; }
     .add { padding:20px 22px 22px; border-top:1px solid var(--line); background:#fdfbf7; }
     .add-grid { display:grid; grid-template-columns:1.3fr .7fr; gap:10px; } .wide { grid-column:span 2; }
     button { border:0; border-radius:8px; padding:9px 12px; font-weight:750; cursor:pointer; transition:transform .15s, filter .15s; } button:hover { transform:translateY(-1px); filter:brightness(.97); }
@@ -113,7 +117,7 @@
     const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
     const $ = id => document.getElementById(id);
     const esc = s => String(s ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
-    let currentUser = null, profile = null, canCreateProfile = false, selectedId = null, profiles = [], requests = [], wishes = [], claims = [], shopperNotes = [], season = null;
+    let currentUser = null, profile = null, canCreateProfile = false, selectedId = null, profiles = [], requests = [], wishes = [], claims = [], shopperNotes = [], giftIdeas = [], season = null;
     const appUrl = `${window.location.origin}${window.location.pathname}`;
 
     function showError(error) { if (error) { console.error(error); window.alert(error.message || 'Something went wrong. Please try again.'); } }
@@ -124,7 +128,7 @@
     async function signIn() { const { error } = await db.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: appUrl } }); showError(error); }
     async function signOut() { const { error } = await db.auth.signOut(); showError(error); }
     async function loadAccount(session) {
-      currentUser = session?.user || null; profile = null; canCreateProfile = false; selectedId = null; profiles = []; requests = []; wishes = []; claims = []; shopperNotes = []; season = null;
+      currentUser = session?.user || null; profile = null; canCreateProfile = false; selectedId = null; profiles = []; requests = []; wishes = []; claims = []; shopperNotes = []; giftIdeas = []; season = null;
       if (!currentUser) { render(); return; }
       const { data, error } = await db.from('profiles').select('*').eq('id', currentUser.id).maybeSingle();
       if (error) { showError(error); render(); return; }
@@ -148,13 +152,15 @@
       const [wishResult, seasonResult] = await Promise.all([db.from('wishes').select('*').eq('owner_id', selectedId).order('created_at', { ascending: false }), db.from('gift_seasons').select('*').eq('owner_id', selectedId).maybeSingle()]);
       if (wishResult.error) showError(wishResult.error); else wishes = wishResult.data || [];
       if (seasonResult.error) showError(seasonResult.error); else season = seasonResult.data;
-      claims = []; shopperNotes = [];
+      claims = []; shopperNotes = []; giftIdeas = [];
       if (!isOwnList() && wishes.length) {
         const ids = wishes.map(w => w.id);
-        const [claimResult, noteResult] = await Promise.all([db.from('claims').select('*').in('wish_id', ids), db.from('gift_notes').select('*').in('wish_id', ids).order('created_at', { ascending: true })]);
+        const [claimResult, noteResult, ideaResult] = await Promise.all([db.from('claims').select('*').in('wish_id', ids), db.from('gift_notes').select('*').in('wish_id', ids).order('created_at', { ascending: true }), db.from('gift_ideas').select('*').eq('recipient_id', selectedId).order('created_at', { ascending: false })]);
         if (claimResult.error) showError(claimResult.error); else claims = claimResult.data || [];
         if (noteResult.error) showError(noteResult.error); else shopperNotes = noteResult.data || [];
+        if (ideaResult.error) showError(ideaResult.error); else giftIdeas = ideaResult.data || [];
       }
+      else if (!isOwnList()) { const ideaResult = await db.from('gift_ideas').select('*').eq('recipient_id', selectedId).order('created_at', { ascending: false }); if (ideaResult.error) showError(ideaResult.error); else giftIdeas = ideaResult.data || []; }
     }
     async function refresh() { await loadNetwork(); await loadWishlist(); render(); }
 
@@ -182,7 +188,9 @@
       $('seasonName').value = season?.active ? season.name : ''; $('seasonUntil').value = season?.active && season.ends_on ? season.ends_on : '';
       const seasonText = season?.ends_on ? `Gift season is active for ${season.name} — please avoid buying from your wishlist until after ${new Date(season.ends_on + 'T12:00').toLocaleDateString(undefined, { day: 'numeric', month: 'long' })}.` : season?.active ? `Gift season is active for ${season.name} — please avoid buying from your wishlist for now.` : '';
       $('seasonBanner').className = `season-banner${season?.active ? ' show' : ''}`; $('seasonBanner').textContent = seasonText;
-      $('list').innerHTML = wishes.length ? wishes.map(w => { const claim = claims.find(c => c.wish_id === w.id); const action = own ? `<button class="danger" onclick="removeGift('${w.id}')">Remove</button>` : claim ? (claim.claimant_id === currentUser.id ? `<button class="unbuy" onclick="toggleClaim('${w.id}')">Claimed by you</button>` : `<span class="cost">Claimed</span>`) : `<button class="buy" onclick="toggleClaim('${w.id}')">I’ll buy this</button>`; const notes = shopperNotes.filter(n => n.wish_id === w.id); const noteBlock = own ? '' : `<div class="shopper-notes"><label>Private shopper notes</label>${notes.map(n => `<div class="shopper-note"><span>${linkify(n.body)}</span>${n.author_id === currentUser.id ? `<button class="danger" onclick="removePrivateNote('${n.id}')">Remove</button>` : ''}</div>`).join('')}<form class="shopper-note-form" onsubmit="addPrivateNote(event, '${w.id}')"><input required maxlength="500" placeholder="Add a link or note for the gift group"><button class="secondary" type="submit">Add</button></form></div>`; return `<div class="gift ${!own && claim ? 'bought' : ''}"><div class="gift-main"><div class="gift-title">${esc(w.name)}</div>${w.comment ? `<div class="gift-comment">${esc(w.comment)}</div>` : ''}${w.link ? `<div class="gift-note"><a href="${esc(w.link)}" target="_blank" rel="noopener">View gift ↗</a></div>` : ''}</div>${w.budget ? `<span class="cost">${esc(w.budget)}</span>` : ''}${action}${noteBlock}</div>`; }).join('') : '<div class="empty">Nothing here yet.</div>';
+      const wishesMarkup = wishes.length ? wishes.map(w => { const claim = claims.find(c => c.wish_id === w.id); const action = own ? `<button class="danger" onclick="removeGift('${w.id}')">Remove</button>` : claim ? (claim.claimant_id === currentUser.id ? `<button class="unbuy" onclick="toggleClaim('${w.id}')">Claimed by you</button>` : `<span class="cost">Claimed</span>`) : `<button class="buy" onclick="toggleClaim('${w.id}')">I’ll buy this</button>`; const notes = shopperNotes.filter(n => n.wish_id === w.id); const noteBlock = own ? '' : `<div class="shopper-notes"><label>Private shopper notes</label>${notes.map(n => `<div class="shopper-note"><span>${linkify(n.body)}</span>${n.author_id === currentUser.id ? `<button class="danger" onclick="removePrivateNote('${n.id}')">Remove</button>` : ''}</div>`).join('')}<form class="shopper-note-form" onsubmit="addPrivateNote(event, '${w.id}')"><input required maxlength="500" placeholder="Add a link or note for the gift group"><button class="secondary" type="submit">Add</button></form></div>`; return `<div class="gift ${!own && claim ? 'bought' : ''}"><div class="gift-main"><div class="gift-title">${esc(w.name)}</div>${w.comment ? `<div class="gift-comment">${esc(w.comment)}</div>` : ''}${w.link ? `<div class="gift-note"><a href="${esc(w.link)}" target="_blank" rel="noopener">View gift ↗</a></div>` : ''}</div>${w.budget ? `<span class="cost">${esc(w.budget)}</span>` : ''}${action}${noteBlock}</div>`; }).join('') : '<div class="empty">Nothing here yet.</div>';
+      const ideasBlock = own ? '' : `<div class="secret-ideas"><h3>Secret gift ideas</h3><p>Only friends shopping for ${esc(viewing.username)} can see these ideas.</p>${giftIdeas.map(idea => `<div class="secret-idea"><div><div class="secret-idea-title">${esc(idea.title)}</div>${idea.note ? `<div class="secret-idea-copy">${esc(idea.note)}</div>` : ''}${idea.link ? `<a href="${esc(idea.link)}" target="_blank" rel="noopener">View idea ↗</a>` : ''}</div>${idea.author_id === currentUser.id ? `<button class="danger" onclick="removeGiftIdea('${idea.id}')">Remove</button>` : ''}</div>`).join('')}<form class="secret-idea-form" onsubmit="addGiftIdea(event)"><input name="title" required maxlength="100" placeholder="Gift idea"><input name="link" maxlength="300" placeholder="Link (optional)"><textarea class="wide" name="note" maxlength="500" rows="2" placeholder="Why it could be a lovely choice (optional)"></textarea><button class="secondary wide" type="submit">+ Add secret idea</button></form></div>`;
+      $('list').innerHTML = wishesMarkup + ideasBlock;
     }
 
     async function submitProfileOrRequest(event) {
@@ -196,13 +204,15 @@
     function linkify(text) { const safe = esc(text); return safe.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1 ↗</a>'); }
     async function addPrivateNote(event, wishId) { event.preventDefault(); const input = event.currentTarget.querySelector('input'); const body = input.value.trim(); if (!body) return; const { error } = await db.from('gift_notes').insert({ wish_id: wishId, author_id: currentUser.id, body }); if (error) { showError(error); return; } input.value = ''; await refresh(); }
     async function removePrivateNote(id) { const { error } = await db.from('gift_notes').delete().eq('id', id); if (error) showError(error); else await refresh(); }
+    async function addGiftIdea(event) { event.preventDefault(); const form = event.currentTarget; const fields = new FormData(form); const { error } = await db.from('gift_ideas').insert({ recipient_id: selectedId, author_id: currentUser.id, title: String(fields.get('title')).trim(), link: String(fields.get('link')).trim() || null, note: String(fields.get('note')).trim() || null }); if (error) { showError(error); return; } form.reset(); await refresh(); }
+    async function removeGiftIdea(id) { const { error } = await db.from('gift_ideas').delete().eq('id', id); if (error) showError(error); else await refresh(); }
     async function removeGift(id) { const { error } = await db.from('wishes').delete().eq('id', id); if (error) showError(error); else await refresh(); }
     async function toggleClaim(wishId) { const existing = claims.find(c => c.wish_id === wishId); const result = existing?.claimant_id === currentUser.id ? await db.from('claims').delete().eq('wish_id', wishId) : await db.from('claims').insert({ wish_id: wishId, claimant_id: currentUser.id }); if (result.error) showError(result.error); else await refresh(); }
     async function answerRequest(id, status) { const { error } = await db.from('friend_requests').update({ status }).eq('id', id); if (error) showError(error); else await refresh(); }
     async function setSeason(event) { event.preventDefault(); const { error } = await db.from('gift_seasons').upsert({ owner_id: selectedId, name: $('seasonName').value.trim(), ends_on: $('seasonUntil').value || null, active: true, updated_at: new Date().toISOString() }); if (error) showError(error); else await refresh(); }
     async function endSeason() { const { error } = await db.from('gift_seasons').update({ active: false, updated_at: new Date().toISOString() }).eq('owner_id', selectedId); if (error) showError(error); else await refresh(); }
     window.viewPerson = async id => { selectedId = id; await loadWishlist(); render(); };
-    window.removeGift = removeGift; window.toggleClaim = toggleClaim; window.answerRequest = answerRequest; window.addPrivateNote = addPrivateNote; window.removePrivateNote = removePrivateNote;
+    window.removeGift = removeGift; window.toggleClaim = toggleClaim; window.answerRequest = answerRequest; window.addPrivateNote = addPrivateNote; window.removePrivateNote = removePrivateNote; window.addGiftIdea = addGiftIdea; window.removeGiftIdea = removeGiftIdea;
     $('memberForm').onsubmit = submitProfileOrRequest; $('addForm').onsubmit = addGift; $('seasonForm').onsubmit = setSeason; $('endSeason').onclick = endSeason; $('openFriendDialog').onclick = openFriendDialog; $('closeFriendDialog').onclick = () => $('friendDialog').close();
     db.auth.getSession().then(({ data }) => loadAccount(data.session)); db.auth.onAuthStateChange((_event, session) => setTimeout(() => loadAccount(session), 0));
   </script>
