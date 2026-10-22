@@ -20,6 +20,9 @@
     .notice.show { display:block; }
     .season-banner { display:none; background:#293a57; color:#fffaf0; border-radius:11px; margin:0 0 22px; padding:13px 15px; font-size:14px; box-shadow:0 8px 20px #293a5720; }
     .season-banner.show { display:block; }
+    .gift-rule { display:flex; align-items:center; gap:11px; margin:0 0 22px; padding:11px 14px; border:1px solid #d9b77a54; border-radius:2px; background:#ffffff0a; color:#d8d2c8; font-size:13px; }
+    .gift-rule-mark { display:grid; place-items:center; width:24px; height:24px; flex:none; border:1px solid #d9b77a8a; border-radius:50%; color:#e4c793; font-family:Georgia, 'Times New Roman', serif; font-size:15px; }
+    .gift-rule strong { color:#f0e1c4; font-weight:700; }
     .grid { display:grid; grid-template-columns:1.06fr .94fr; gap:24px; align-items:start; }
     .panel { background:rgba(255,253,250,.92); border:1px solid var(--line); border-radius:18px; box-shadow:0 16px 42px #392d1b0a; overflow:hidden; }
     .panel-head { padding:20px 22px; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; gap:10px; }
@@ -92,6 +95,7 @@
     .secondary { border:1px solid #d9b77a88; border-radius:2px; background:transparent; color:#e4c793; } .buy { border-radius:2px; background:#1b625f; color:#eaf5f1; } .unbuy { border-radius:2px; background:#ffffff18; color:#dfd6c8; } .danger { color:#d49da1; }
     .people-panel { min-height:520px; } .people-list { padding:12px; }
     .person-choice { border-radius:2px; color:#d8d4d0; padding:12px 10px; font-size:14px; } .person-choice:hover, .person-choice.active { color:#fff8ef; background:#ffffff12; } .person-choice.active { border-left:2px solid #d9b77a; } .person-choice.active::before { color:#d9b77a; } .person-choice.me { color:#e6ca99; } .person-choice.me::after { content:'You'; float:right; font-size:10px; letter-spacing:.08em; opacity:.72; text-transform:uppercase; }
+    .wish-badge { display:inline-grid; place-items:center; width:17px; height:17px; margin-left:7px; border-radius:50%; color:#20151a; background:#e5bd75; font-size:11px; line-height:1; vertical-align:1px; box-shadow:0 0 0 3px #e5bd7519; }
     .friend-action { border-color:#ffffff19; padding:16px; } .friend-action button { padding:11px 12px; }
     .season-settings { color:#b7b3b3; border-top:1px solid #ffffff19; padding-top:14px; margin:4px 16px 16px; } .season-settings summary { color:#d8c4a0; }
     .season-banner { background:linear-gradient(110deg, #1b625f, #283552); color:#f8f1e7; border-radius:2px; box-shadow:0 16px 34px #0004; }
@@ -107,6 +111,7 @@
     body.gift-season-active .panel-head, body.gift-season-active .friend-action, body.gift-season-active .season-settings { border-color:#f0c7b821; }
     body.gift-season-active .person-choice.active { border-left-color:#f0c7b8; }
     body.gift-season-active .season-banner { background:linear-gradient(110deg, #7a294b, #4c2548); box-shadow:0 16px 34px #1d071866; }
+    body.gift-season-active .gift-rule { border-color:#f0c7b85e; background:#fff1f20c; }
     body.gift-season-active .buy { background:#7b3451; }
     body.gift-season-active .secondary { border-color:#f0c7b88c; color:#f0c7b8; }
     @media (max-width:720px) { header,.top { align-items:flex-start; flex-direction:column; }.switcher { width:100%; }.grid { grid-template-columns:1fr; } main { padding-top:38px; } h1 { letter-spacing:-2.5px; } }
@@ -116,7 +121,7 @@
   <header><div class="brand">Secret <span>Wishlist</span></div><div class="profile-badge" id="headerName">Your private list</div></header>
   <main>
     <div class="top"><div><h1 id="title">Wishlists</h1><p id="subtitle">Your ideas, kept between friends.</p></div><select id="listOwner" hidden></select></div>
-    <div class="notice" id="notice"></div><div class="season-banner" id="seasonBanner"></div>
+    <div class="notice" id="notice"></div><div class="season-banner" id="seasonBanner"></div><div class="gift-rule" role="note"><span class="gift-rule-mark" aria-hidden="true">✦</span><span><strong>A small house rule:</strong> no watches or shoes, please.</span></div>
     <div class="grid">
       <section class="panel"><div class="panel-head"><h2 id="listHeading">Wishlist</h2><span class="count" id="count"></span></div><div class="list" id="list"></div><form class="add" id="addForm"><h2 style="margin-bottom:13px">Add a wish</h2><div class="add-grid"><input id="giftName" required maxlength="100" placeholder="Gift name, e.g. Wool blanket"><input id="giftPrice" maxlength="30" placeholder="Budget, e.g. £45"><textarea class="wide" id="giftComment" maxlength="500" rows="2" placeholder="Note about this wish (optional)"></textarea><input class="wide" id="giftLink" maxlength="300" placeholder="Link (optional)"></div><button class="primary" type="submit">Add to my wishlist</button></form></section>
       <aside class="panel people-panel"><div class="panel-head"><h2>People</h2><span class="count" id="peopleCount"></span></div><div class="people-list" id="peopleList"></div><div class="requests" id="requests"></div><details class="season-settings" id="season-settings"><summary>Gift season settings</summary><form id="seasonForm"><div class="add-grid"><input id="seasonName" required maxlength="50" placeholder="Occasion, e.g. Christmas"><input id="seasonUntil" type="date" aria-label="End date"></div><button class="secondary" type="submit">Turn on</button><button class="danger" id="endSeason" type="button">End</button></form></details><div class="friend-action"><button class="secondary" id="openFriendDialog" type="button">+ Add friend</button></div></aside>
@@ -131,7 +136,7 @@
     const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
     const $ = id => document.getElementById(id);
     const esc = s => String(s ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
-    let currentUser = null, profile = null, canCreateProfile = false, selectedId = null, editingWishId = null, editingGiftIdeaId = null, profiles = [], requests = [], wishes = [], claims = [], shopperNotes = [], giftIdeas = [], giftIdeaClaims = [], season = null;
+    let currentUser = null, profile = null, canCreateProfile = false, selectedId = null, editingWishId = null, editingGiftIdeaId = null, profiles = [], requests = [], wishes = [], claims = [], shopperNotes = [], giftIdeas = [], giftIdeaClaims = [], membersWithWishes = new Set(), season = null;
     const appUrl = `${window.location.origin}${window.location.pathname}`;
 
     function showError(error) { if (error) { console.error(error); window.alert(error.message || 'Something went wrong. Please try again.'); } }
@@ -142,7 +147,7 @@
     async function signIn() { const { error } = await db.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: appUrl } }); showError(error); }
     async function signOut() { const { error } = await db.auth.signOut(); showError(error); }
     async function loadAccount(session) {
-      currentUser = session?.user || null; profile = null; canCreateProfile = false; selectedId = null; profiles = []; requests = []; wishes = []; claims = []; shopperNotes = []; giftIdeas = []; giftIdeaClaims = []; season = null;
+      currentUser = session?.user || null; profile = null; canCreateProfile = false; selectedId = null; profiles = []; requests = []; wishes = []; claims = []; shopperNotes = []; giftIdeas = []; giftIdeaClaims = []; membersWithWishes = new Set(); season = null;
       if (!currentUser) { render(); return; }
       const { data, error } = await db.from('profiles').select('*').eq('id', currentUser.id).maybeSingle();
       if (error) { showError(error); render(); return; }
@@ -157,9 +162,10 @@
       if (!profile && canCreateProfile) openFriendDialog();
     }
     async function loadNetwork() {
-      const [profileResult, requestResult] = await Promise.all([db.from('profiles').select('id, username'), db.from('friend_requests').select('*')]);
+      const [profileResult, requestResult, wishOwnerResult] = await Promise.all([db.from('profiles').select('id, username'), db.from('friend_requests').select('*'), db.from('wishes').select('owner_id')]);
       if (profileResult.error) showError(profileResult.error); else profiles = profileResult.data || [];
       if (requestResult.error) showError(requestResult.error); else requests = requestResult.data || [];
+      if (wishOwnerResult.error) showError(wishOwnerResult.error); else membersWithWishes = new Set((wishOwnerResult.data || []).map(wish => wish.owner_id));
     }
     async function loadWishlist() {
       if (!selectedId) return;
@@ -193,7 +199,7 @@
       $('headerName').textContent = signedIn ? (profile ? `@${profile.username} · Sign out` : canCreateProfile ? 'Finish profile' : 'Invitation required · Sign out') : 'Sign in with Google';
       $('headerName').style.cursor = 'pointer'; $('headerName').onclick = signedIn ? signOut : signIn;
       $('peopleCount').textContent = `${people.length} member${people.length === 1 ? '' : 's'}`;
-      $('peopleList').innerHTML = people.length ? people.map(p => `<button class="person-choice ${p.id === selectedId ? 'active' : ''} ${p.id === currentUser.id ? 'me' : ''}" type="button" onclick="viewPerson('${p.id}')">${esc(p.username)}</button>`).join('') : `<div class="empty">${signedIn && !profile && !canCreateProfile ? 'You need an invitation to join this wishlist.' : 'Sign in to connect with friends.'}</div>`;
+      $('peopleList').innerHTML = people.length ? people.map(p => `<button class="person-choice ${p.id === selectedId ? 'active' : ''} ${p.id === currentUser.id ? 'me' : ''}" type="button" onclick="viewPerson('${p.id}')">${esc(p.username)}${membersWithWishes.has(p.id) ? '<span class="wish-badge" title="Has wishes" aria-label="Has wishes">✦</span>' : ''}</button>`).join('') : `<div class="empty">${signedIn && !profile && !canCreateProfile ? 'You need an invitation to join this wishlist.' : 'Sign in to connect with friends.'}</div>`;
       const pending = requests.filter(r => r.recipient_id === currentUser?.id && r.status === 'pending');
       $('requests').innerHTML = pending.length ? `<label>Friend requests</label>${pending.map(r => `<div class="request"><span>@${esc(profileFor(r.sender_id)?.username || 'unknown')}</span><span class="request-actions"><button class="buy" onclick="answerRequest('${r.id}','accepted')">Accept</button><button class="danger" onclick="answerRequest('${r.id}','declined')">Decline</button></span></div>`).join('')}` : '';
       $('openFriendDialog').textContent = profile ? '+ Add friend' : canCreateProfile ? 'Create your profile' : 'Invitation required';
