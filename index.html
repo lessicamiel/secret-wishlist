@@ -136,7 +136,7 @@
     const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
     const $ = id => document.getElementById(id);
     const esc = s => String(s ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
-    let currentUser = null, profile = null, canCreateProfile = false, selectedId = null, editingWishId = null, editingGiftIdeaId = null, profiles = [], requests = [], wishes = [], claims = [], shopperNotes = [], giftIdeas = [], giftIdeaClaims = [], membersWithWishes = new Set(), season = null;
+    let currentUser = null, profile = null, canCreateProfile = false, selectedId = null, editingWishId = null, editingGiftIdeaId = null, profiles = [], requests = [], wishes = [], claims = [], shopperNotes = [], giftIdeas = [], giftIdeaClaims = [], latestWishByOwner = {}, seenWishlists = {}, season = null;
     const appUrl = `${window.location.origin}${window.location.pathname}`;
 
     function showError(error) { if (error) { console.error(error); window.alert(error.message || 'Something went wrong. Please try again.'); } }
@@ -147,7 +147,7 @@
     async function signIn() { const { error } = await db.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: appUrl } }); showError(error); }
     async function signOut() { const { error } = await db.auth.signOut(); showError(error); }
     async function loadAccount(session) {
-      currentUser = session?.user || null; profile = null; canCreateProfile = false; selectedId = null; profiles = []; requests = []; wishes = []; claims = []; shopperNotes = []; giftIdeas = []; giftIdeaClaims = []; membersWithWishes = new Set(); season = null;
+      currentUser = session?.user || null; profile = null; canCreateProfile = false; selectedId = null; profiles = []; requests = []; wishes = []; claims = []; shopperNotes = []; giftIdeas = []; giftIdeaClaims = []; latestWishByOwner = {}; seenWishlists = {}; season = null;
       if (!currentUser) { render(); return; }
       const { data, error } = await db.from('profiles').select('*').eq('id', currentUser.id).maybeSingle();
       if (error) { showError(error); render(); return; }
@@ -162,10 +162,11 @@
       if (!profile && canCreateProfile) openFriendDialog();
     }
     async function loadNetwork() {
-      const [profileResult, requestResult, wishOwnerResult] = await Promise.all([db.from('profiles').select('id, username'), db.from('friend_requests').select('*'), db.from('wishes').select('owner_id')]);
+      const [profileResult, requestResult, wishOwnerResult, viewResult] = await Promise.all([db.from('profiles').select('id, username'), db.from('friend_requests').select('*'), db.from('wishes').select('owner_id, created_at'), db.from('wishlist_views').select('owner_id, seen_at').eq('viewer_id', currentUser.id)]);
       if (profileResult.error) showError(profileResult.error); else profiles = profileResult.data || [];
       if (requestResult.error) showError(requestResult.error); else requests = requestResult.data || [];
-      if (wishOwnerResult.error) showError(wishOwnerResult.error); else membersWithWishes = new Set((wishOwnerResult.data || []).map(wish => wish.owner_id));
+      if (wishOwnerResult.error) showError(wishOwnerResult.error); else latestWishByOwner = (wishOwnerResult.data || []).reduce((latest, wish) => { if (!latest[wish.owner_id] || wish.created_at > latest[wish.owner_id]) latest[wish.owner_id] = wish.created_at; return latest; }, {});
+      if (viewResult.error) showError(viewResult.error); else seenWishlists = (viewResult.data || []).reduce((seen, view) => { seen[view.owner_id] = view.seen_at; return seen; }, {});
     }
     async function loadWishlist() {
       if (!selectedId) return;
@@ -199,7 +200,7 @@
       $('headerName').textContent = signedIn ? (profile ? `@${profile.username} · Sign out` : canCreateProfile ? 'Finish profile' : 'Invitation required · Sign out') : 'Sign in with Google';
       $('headerName').style.cursor = 'pointer'; $('headerName').onclick = signedIn ? signOut : signIn;
       $('peopleCount').textContent = `${people.length} member${people.length === 1 ? '' : 's'}`;
-      $('peopleList').innerHTML = people.length ? people.map(p => `<button class="person-choice ${p.id === selectedId ? 'active' : ''} ${p.id === currentUser.id ? 'me' : ''}" type="button" onclick="viewPerson('${p.id}')">${esc(p.username)}${membersWithWishes.has(p.id) ? '<span class="wish-badge" title="Has wishes" aria-label="Has wishes">✦</span>' : ''}</button>`).join('') : `<div class="empty">${signedIn && !profile && !canCreateProfile ? 'You need an invitation to join this wishlist.' : 'Sign in to connect with friends.'}</div>`;
+      $('peopleList').innerHTML = people.length ? people.map(p => { const hasUnseenWish = p.id !== currentUser.id && latestWishByOwner[p.id] && (!seenWishlists[p.id] || latestWishByOwner[p.id] > seenWishlists[p.id]); return `<button class="person-choice ${p.id === selectedId ? 'active' : ''} ${p.id === currentUser.id ? 'me' : ''}" type="button" onclick="viewPerson('${p.id}')">${esc(p.username)}${hasUnseenWish ? '<span class="wish-badge" title="New wish added" aria-label="New wish added">✦</span>' : ''}</button>`; }).join('') : `<div class="empty">${signedIn && !profile && !canCreateProfile ? 'You need an invitation to join this wishlist.' : 'Sign in to connect with friends.'}</div>`;
       const pending = requests.filter(r => r.recipient_id === currentUser?.id && r.status === 'pending');
       $('requests').innerHTML = pending.length ? `<label>Friend requests</label>${pending.map(r => `<div class="request"><span>@${esc(profileFor(r.sender_id)?.username || 'unknown')}</span><span class="request-actions"><button class="buy" onclick="answerRequest('${r.id}','accepted')">Accept</button><button class="danger" onclick="answerRequest('${r.id}','declined')">Decline</button></span></div>`).join('')}` : '';
       $('openFriendDialog').textContent = profile ? '+ Add friend' : canCreateProfile ? 'Create your profile' : 'Invitation required';
@@ -238,7 +239,8 @@
     async function answerRequest(id, status) { const { error } = await db.from('friend_requests').update({ status }).eq('id', id); if (error) showError(error); else await refresh(); }
     async function setSeason(event) { event.preventDefault(); const { error } = await db.from('gift_seasons').upsert({ owner_id: selectedId, name: $('seasonName').value.trim(), ends_on: $('seasonUntil').value || null, active: true, updated_at: new Date().toISOString() }); if (error) showError(error); else await refresh(); }
     async function endSeason() { const { error } = await db.from('gift_seasons').update({ active: false, updated_at: new Date().toISOString() }).eq('owner_id', selectedId); if (error) showError(error); else await refresh(); }
-    window.viewPerson = async id => { selectedId = id; await loadWishlist(); render(); };
+    async function markWishlistSeen(ownerId) { if (!currentUser || ownerId === currentUser.id) return; const seenAt = new Date().toISOString(); const { error } = await db.from('wishlist_views').upsert({ viewer_id: currentUser.id, owner_id: ownerId, seen_at: seenAt }, { onConflict: 'viewer_id,owner_id' }); if (error) { showError(error); return; } seenWishlists[ownerId] = seenAt; }
+    window.viewPerson = async id => { selectedId = id; await loadWishlist(); await markWishlistSeen(id); render(); };
     window.removeGift = removeGift; window.openWishEditor = openWishEditor; window.toggleClaim = toggleClaim; window.answerRequest = answerRequest; window.addPrivateNote = addPrivateNote; window.removePrivateNote = removePrivateNote; window.addGiftIdea = addGiftIdea; window.openGiftIdeaEditor = openGiftIdeaEditor; window.removeGiftIdea = removeGiftIdea; window.toggleGiftIdeaClaim = toggleGiftIdeaClaim;
     $('memberForm').onsubmit = submitProfileOrRequest; $('addForm').onsubmit = addGift; $('wishEditorForm').onsubmit = saveWishEdits; $('giftIdeaEditorForm').onsubmit = saveGiftIdeaEdits; $('seasonForm').onsubmit = setSeason; $('endSeason').onclick = endSeason; $('openFriendDialog').onclick = openFriendDialog; $('closeFriendDialog').onclick = () => $('friendDialog').close(); $('closeWishEditor').onclick = () => { $('wishEditor').close(); editingWishId = null; }; $('closeGiftIdeaEditor').onclick = () => { $('giftIdeaEditor').close(); editingGiftIdeaId = null; };
     db.auth.getSession().then(({ data }) => loadAccount(data.session)); db.auth.onAuthStateChange((_event, session) => setTimeout(() => loadAccount(session), 0));
